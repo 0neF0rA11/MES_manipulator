@@ -66,7 +66,7 @@ def apply_settings(frame):
 
 
 # Функция для обработки кадра: поиск области по цвету
-def process_frame(frame):
+def process_frame(frame, min_width=50, min_height=50):
     # Преобразуем кадр в цветовое пространство HSV
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -79,9 +79,13 @@ def process_frame(frame):
     # Если найдены контуры, рисуем прямоугольник вокруг самой большой области
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        
+        # Проверяем, больше ли ширина и высота минимальных значений
+        if w >= min_width and h >= min_height:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
     return frame
+
 
 
 # Функция для выбора цвета пользователем
@@ -99,6 +103,7 @@ def choose_color():
         hue = hsv_color[0][0][0]
         lower_bound = np.array([hue - 20, 50, 50])
         upper_bound = np.array([hue + 20, 255, 255])
+        
 
 
 # Функции для обновления значений ползунков
