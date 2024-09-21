@@ -32,6 +32,12 @@ class Application(tk.Tk):
 
         self.ser = Server()
 
+        self.k = 83 / 70
+        self.cm_to_pixel = int(250 * self.k)
+        self.x_0, self.y_0 = self.cm_to_pixel, self.cm_to_pixel
+        self.x_max = self.x_0 + self.cm_to_pixel
+        self.y_max = self.y_0 + self.cm_to_pixel
+
         self.exposure = 0
         self.white_balance = 0
         self.color_components = 0
@@ -131,7 +137,8 @@ class Application(tk.Tk):
         ttk.Button(send_frame, text="Отправить координаты", command=self.send_coords).grid(column=0,
                                                                                            row=0,
                                                                                            pady=10,
-                                                                                           columnspan=2)
+                                                                                           columnspan=2
+                                                                                           )
 
     def send_coords(self):
         first_object = sorted(self.objects_coord, key=lambda point: point[0]**2 + point[1]**2)[0]
@@ -202,13 +209,12 @@ class Application(tk.Tk):
                     frame = self.apply_settings(frame)
                     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
                     hsv_value = hsv_frame[frame_y, frame_x]
-                    print(frame_y, frame_x)
 
                     h_val = int(hsv_value[0])
                     s_val = int(hsv_value[1])
                     v_val = int(hsv_value[2])
 
-                    tol_h = 30
+                    tol_h = 2
                     tol_s = 50
                     tol_v = 50
 
@@ -245,10 +251,22 @@ class Application(tk.Tk):
                     self.objects_coord = []
                     for i, contour in enumerate(conts):
                         x, y, w, h = cv2.boundingRect(contour)
-                        if w * h > self.min_area:
+                        center_x, center_y = x + w // 2, self.image_size[1] - (y + h) + h // 2
+                        center_x_cam, center_y_cam = center_x - self.image_size[0] // 2, center_y - self.image_size[1] // 2
+                        center_x_coord, center_y_coord = center_x_cam + self.x_0, center_y_cam + self.y_0
+                        if w * h > self.min_area and 0 <= center_x_coord <= self.x_max and 0 <= center_y_coord <= self.y_max:
                             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                             cv2.putText(frame, str(i + 1), (x, y - 10), self.font, 0.5, (0, 255, 255), 2)
-                            self.objects_coord.append((x + w // 2, self.image_size[1] - (y + h) + h// 2))
+                            self.objects_coord.append((int(center_x_coord * 1 / self.k), int(center_y_coord * 1 / self.k)))
+
+                    center_x = self.image_size[0] // 2
+                    center_y = self.image_size[1] // 2
+
+                    line_length = 20
+                    cv2.line(frame, (center_x - line_length // 2, center_y), (center_x + line_length // 2, center_y),
+                             (255, 0, 0), 1)
+                    cv2.line(frame, (center_x, center_y - line_length // 2), (center_x, center_y + line_length // 2),
+                             (255, 0, 0), 1)
 
                     img = Image.fromarray(frame)
                     imgtk = ImageTk.PhotoImage(image=img)
@@ -305,7 +323,7 @@ class Application(tk.Tk):
             s_val = int(hsv_color[0][0][1])
             v_val = int(hsv_color[0][0][2])
 
-            tol_h = 90
+            tol_h = 2
             tol_s = 130
             tol_v = 130
 
