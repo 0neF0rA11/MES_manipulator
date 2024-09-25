@@ -53,6 +53,7 @@ class Application(tk.Tk):
         self.received_data_label = ttk.Label(self, text="Received: None", font=("Arial", 14, "bold"))
         self.received_data_label.place(relx=.05, rely=.9, anchor="sw")
 
+        # self.draw_axis()
         self.create_port_widgets()
         self.create_camera_widgets()
         self.create_composition_settings()
@@ -90,6 +91,34 @@ class Application(tk.Tk):
                    command=lambda: self.ser.close_port(connect_status_label)
                    ).grid(column=2, row=1)
 
+    def draw_axis(self):
+        axis_frame = ttk.Frame(self)
+        axis_frame.place(relx=0.43, rely=0.65, anchor='n')
+
+        axis_canvas = tk.Canvas(axis_frame, width=130, height=110)
+        axis_canvas.pack()
+
+        padding = 25
+        origin_x = padding
+        origin_y = 90
+        axis_length = 70
+
+        axis_canvas.create_text(origin_x - 10, origin_y + 10, text="0", fill='black',
+                                font=('Arial', 12, 'bold'))
+        axis_canvas.create_line(origin_x, origin_y, origin_x, origin_y - axis_length, arrow=tk.LAST, fill='blue',
+                                width=2)
+        axis_canvas.create_text(origin_x - 15, origin_y - axis_length, text="Y", fill='blue',
+                                font=('Arial', 12, 'bold'))
+        axis_canvas.create_text(origin_x + 28, origin_y - axis_length, text="255, мм", fill='blue',
+                                font=('Arial', 8, 'bold'))
+
+        axis_canvas.create_line(origin_x, origin_y, origin_x + axis_length, origin_y, arrow=tk.LAST, fill='red',
+                                width=2)
+        axis_canvas.create_text(origin_x + axis_length, origin_y + 15, text="X", fill='red',
+                                font=('Arial', 12, 'bold'))
+        axis_canvas.create_text(origin_x + axis_length, origin_y - 15, text="255, мм", fill='red',
+                                font=('Arial', 8, 'bold'))
+
     def create_camera_widgets(self):
         camera_frame = ttk.Frame(self, padding='10')
         camera_frame.place(relx=0.7, rely=0.02, anchor='n')
@@ -104,6 +133,8 @@ class Application(tk.Tk):
 
         control_frame = ttk.Frame(self, padding='10')
         control_frame.place(relx=0.7, rely=0.75, anchor='n')
+        # control_frame.place(relx=0.7, rely=0.77, anchor='n')
+        # control_frame.lower()
 
         ttk.Label(control_frame, text="Выбор камеры:").grid(column=0, row=0, sticky=tk.W)
 
@@ -126,22 +157,21 @@ class Application(tk.Tk):
         self.class_labels = {1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorcycle', 5: 'airplane', 6: 'bs', 7: 'train',
                              8: 'trck', 9: 'boat', 10: 'traffic light', 11: 'fire hydrant', 12: 'stop sign',
                              13: 'parking meter', 14: 'bench', 15: 'bird', 16: 'cat', 17: 'dog', 18: 'horse',
-                             19: 'sheep',
-                             20: 'cow', 21: 'elephant', 22: 'bear', 23: 'zebra', 24: 'giraffe', 25: 'backpack',
-                             26: 'mbrella', 27: 'handbag', 28: 'tie', 29: 'sitcase', 30: 'frisbee', 31: 'skis',
-                             32: 'snowboard', 33: 'sports ball', 34: 'kite', 35: 'baseball bat', 36: 'baseball glove',
-                             37: 'skateboard', 38: 'srfboard', 39: 'tennis racket', 40: 'bottle', 41: 'wine glass',
-                             42: 'cp', 43: 'fork', 44: 'knife', 45: 'spoon', 46: 'bowl', 47: 'banana', 48: 'apple',
-                             49: 'sandwich', 50: 'orange', 51: 'broccoli', 52: 'carrot', 53: 'hot dog', 54: 'pizza',
-                             55: 'dont', 56: 'cake', 57: 'chair', 58: 'coch', 59: 'potted plant', 60: 'bed',
-                             61: 'dining table', 62: 'toilet', 63: 'tv', 64: 'laptop', 65: 'mose', 66: 'remote',
-                             67: 'keyboard', 68: 'cell phone', 69: 'microwave', 70: 'oven', 71: 'toaster', 72: 'sink',
-                             73: 'refrigerator', 74: 'book', 75: 'clock', 76: 'vase', 77: 'scissors', 78: 'teddy bear',
-                             79: 'hair drier', 80: 'toothbrsh'
+                             19: 'sheep', 20: 'cow', 21: 'elephant', 22: 'bear', 23: 'zebra', 24: 'giraffe',
+                             25: 'backpack', 26: 'mbrella', 27: 'handbag', 28: 'tie', 29: 'sitcase', 30: 'frisbee',
+                             31: 'skis', 32: 'snowboard', 33: 'sports ball', 34: 'kite', 35: 'baseball bat',
+                             36: 'baseball glove', 37: 'skateboard', 38: 'srfboard', 39: 'tennis racket', 40: 'bottle',
+                             41: 'wine glass', 42: 'cp', 43: 'fork', 44: 'knife', 45: 'spoon', 46: 'bowl', 47: 'banana',
+                             48: 'apple', 49: 'sandwich', 50: 'orange', 51: 'broccoli', 52: 'carrot', 53: 'hot dog',
+                             54: 'pizza', 55: 'dont', 56: 'cake', 57: 'chair', 58: 'coch', 59: 'potted plant',
+                             60: 'bed', 61: 'dining table', 62: 'toilet', 63: 'tv', 64: 'laptop', 65: 'mose',
+                             66: 'remote', 67: 'keyboard', 68: 'cell phone', 69: 'microwave', 70: 'oven', 71: 'toaster',
+                             72: 'sink', 73: 'refrigerator', 74: 'book', 75: 'clock', 76: 'vase', 77: 'scissors',
+                             78: 'teddy bear', 79: 'hair drier', 80: 'toothbrsh'
                              }
-
         self.class_selection_entry = tk.OptionMenu(control_frame, self.class_selection, "All", *self.class_labels.values())
         self.class_selection_entry.grid(column=6, row=0, padx=5)
+
 
     def create_composition_settings(self):
         settings_frame = ttk.Frame(self, padding='10')
@@ -329,6 +359,40 @@ class Application(tk.Tk):
                              (255, 0, 0), 1)
                     cv2.line(frame, (center_x, center_y - line_length // 2), (center_x, center_y + line_length // 2),
                              (255, 0, 0), 1)
+
+                    # Draw axis
+                    image_width, image_height = self.image_size
+                    padding = 35
+                    axis_length = min(image_width, image_height) // 6
+
+                    origin_x = padding
+                    origin_y = image_height - padding
+                    cv2.arrowedLine(
+                        frame,
+                        (origin_x, origin_y),  # Начало вектора
+                        (origin_x, origin_y - axis_length),  # Конец вектора
+                        (255, 0, 0),  # Цвет (синий)
+                        3,  # Толщина линии
+                        tipLength=0.15  # Длина наконечника стрелки
+                    )
+                    cv2.putText(frame, "Y", (origin_x - 15, origin_y - axis_length), self.font, 0.5,
+                                (255, 0, 0), 2)
+                    cv2.putText(frame, "255, mm", (origin_x + 10, origin_y - axis_length),
+                                self.font, 0.43, (255, 0, 0), 1)
+
+                    cv2.arrowedLine(
+                        frame,
+                        (origin_x, origin_y),
+                        (origin_x + axis_length, origin_y),
+                        (0, 0, 255),
+                        3,
+                        tipLength=0.15
+                    )
+                    cv2.putText(frame, "X", (origin_x + axis_length - 5, origin_y + 20), self.font, 0.5,
+                                (0, 0, 255), 2)
+                    cv2.putText(frame, "255, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
+                                0.43, (0, 0, 255), 1)
+                    # cv2.putText(frame, "0", (origin_x - 20, origin_y + 10), self.font, 0.5, (0, 255, 0), 1)
 
                     img = Image.fromarray(frame)
                     imgtk = ImageTk.PhotoImage(image=img)
