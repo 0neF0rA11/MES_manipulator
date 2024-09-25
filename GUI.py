@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
+import pandas as pd
 import tkinter as tk
 from tkinter import ttk, colorchooser
 from PIL import Image, ImageTk
+from ultralytics import YOLO
 from server import Server
 
 
@@ -12,7 +14,8 @@ class Application(tk.Tk):
         self.min_area = 250
 
         self.image_size = (800, 560)
-        self.video_running = False
+        self.video_cv2_running = False
+        self.video_neuro_running = False
         self.video_paused = False
         self.is_camera_on = False
         self.cap = None
@@ -31,6 +34,8 @@ class Application(tk.Tk):
         self.state('zoomed')
 
         self.ser = Server()
+        self.model = YOLO('yolov8s.pt')
+        self.classes = self.model.names
 
         self.k = 83 / 70
         self.cm_to_pixel = int(250 * self.k)
@@ -110,11 +115,33 @@ class Application(tk.Tk):
             self.camera_selection.set("Камеры не найдены")
 
         ttk.Button(control_frame, text="Запустить камеру", command=self.start_cv2_camera).grid(column=2, row=0, padx=5)
-        ttk.Button(control_frame, text="Запустить нейросеть", command=self.start_neuro_camera).grid(column=3, row=0, padx=5)
-        ttk.Button(control_frame, text="Остановить", command=self.stop_camera).grid(column=4, row=0, padx=5)
+        ttk.Button(control_frame, text="Запустить нейросеть", command=self.start_neuro_camera).grid(column=5, row=0, padx=5)
+        ttk.Button(control_frame, text="Остановить", command=self.stop_camera).grid(column=3, row=0, padx=5)
 
         self.pause_button = ttk.Button(control_frame, text="Пауза", command=self.pause_camera)
-        self.pause_button.grid(column=5, row=0, padx=5)
+        self.pause_button.grid(column=4, row=0, padx=5)
+
+        self.class_selection = tk.StringVar()
+        self.class_selection.set("All")
+        self.class_labels = {1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorcycle', 5: 'airplane', 6: 'bs', 7: 'train',
+                             8: 'trck', 9: 'boat', 10: 'traffic light', 11: 'fire hydrant', 12: 'stop sign',
+                             13: 'parking meter', 14: 'bench', 15: 'bird', 16: 'cat', 17: 'dog', 18: 'horse',
+                             19: 'sheep',
+                             20: 'cow', 21: 'elephant', 22: 'bear', 23: 'zebra', 24: 'giraffe', 25: 'backpack',
+                             26: 'mbrella', 27: 'handbag', 28: 'tie', 29: 'sitcase', 30: 'frisbee', 31: 'skis',
+                             32: 'snowboard', 33: 'sports ball', 34: 'kite', 35: 'baseball bat', 36: 'baseball glove',
+                             37: 'skateboard', 38: 'srfboard', 39: 'tennis racket', 40: 'bottle', 41: 'wine glass',
+                             42: 'cp', 43: 'fork', 44: 'knife', 45: 'spoon', 46: 'bowl', 47: 'banana', 48: 'apple',
+                             49: 'sandwich', 50: 'orange', 51: 'broccoli', 52: 'carrot', 53: 'hot dog', 54: 'pizza',
+                             55: 'dont', 56: 'cake', 57: 'chair', 58: 'coch', 59: 'potted plant', 60: 'bed',
+                             61: 'dining table', 62: 'toilet', 63: 'tv', 64: 'laptop', 65: 'mose', 66: 'remote',
+                             67: 'keyboard', 68: 'cell phone', 69: 'microwave', 70: 'oven', 71: 'toaster', 72: 'sink',
+                             73: 'refrigerator', 74: 'book', 75: 'clock', 76: 'vase', 77: 'scissors', 78: 'teddy bear',
+                             79: 'hair drier', 80: 'toothbrsh'
+                             }
+
+        self.class_selection_entry = tk.OptionMenu(control_frame, self.class_selection, "All", *self.class_labels.values())
+        self.class_selection_entry.grid(column=6, row=0, padx=5)
 
     def create_composition_settings(self):
         settings_frame = ttk.Frame(self, padding='10')
@@ -179,24 +206,23 @@ class Application(tk.Tk):
         return available_cameras
 
     def start_cv2_camera(self):
-        if not self.video_running and self.camera_selection.get() != "Камеры не найдены":
+        if not self.video_cv2_running and self.camera_selection.get() != "Камеры не найдены":
+            self.stop_camera()
             camera_index = int(self.camera_selection.get().split()[-1])
             self.cap = cv2.VideoCapture(camera_index)
-            self.video_running = True
-            self.video_paused = False
+            self.video_cv2_running = True
             self.show_frame()
 
     def start_neuro_camera(self):
-        # TODO: ultralytics
-        # camera_index = int(self.camera_selection.get().split()[-1])
-        # self.cap = cv2.VideoCapture(camera_index)
-        # self.video_running = True
-        # self.video_paused = False
-        # self.show_frame()
-        pass
+        if not self.video_neuro_running and self.camera_selection.get() != "Камеры не найдены":
+            self.stop_camera()
+            camera_index = int(self.camera_selection.get().split()[-1])
+            self.cap = cv2.VideoCapture(camera_index)
+            self.video_neuro_running = True
+            self.show_neuro_frame()
 
     def pick_color(self, event):
-        if self.cap and self.video_running:
+        if self.cap and self.video_cv2_running:
             x, y = event.x, event.y
             image_width, image_height = self.image_size
 
@@ -229,8 +255,44 @@ class Application(tk.Tk):
                         min(v_val + tol_v, 255)
                     ], dtype=np.uint8)
 
+    def show_neuro_frame(self):
+        if self.cap and self.video_neuro_running:
+            if not self.video_paused:
+                ret, frame = self.cap.read()
+                if ret:
+                    frame = self.apply_settings(frame)
+                    frame = cv2.resize(frame, self.image_size)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+                    results = self.model.predict(frame, stream_buffer=True, verbose=False)
+
+                    selected_class = self.class_selection.get()
+
+                    a = results[0].boxes.data
+                    px = pd.DataFrame(a).astype("float")
+
+                    for index, row in px.iterrows():
+                        confidence = row[4]
+
+                        x1 = int(row[0])
+                        y1 = int(row[1])
+                        x2 = int(row[2])
+                        y2 = int(row[3])
+                        d = int(row[5])
+                        c = self.classes[d]
+                        if selected_class == "All" or c == selected_class:
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)
+                            cv2.putText(frame, f'{c} {confidence:.2f}', (x1, y1 - 25), self.font,
+                                        0.5, (255, 255, 255), 2)
+
+                    img = Image.fromarray(frame)
+                    imgtk = ImageTk.PhotoImage(image=img)
+                    self.video_label.imgtk = imgtk
+                    self.video_label.configure(image=imgtk)
+            self.video_label.after(10, self.show_neuro_frame)
+
     def show_frame(self):
-        if self.cap and self.video_running:
+        if self.cap and self.video_cv2_running:
             if not self.video_paused:
                 ret, frame = self.cap.read()
                 if ret:
@@ -295,7 +357,7 @@ class Application(tk.Tk):
         return frame
 
     def pause_camera(self):
-        if self.video_running:
+        if self.video_cv2_running or self.video_neuro_running:
             self.video_paused = not self.video_paused
             if self.video_paused:
                 self.pause_button.configure(text="Продолжить")
@@ -303,8 +365,9 @@ class Application(tk.Tk):
                 self.pause_button.configure(text="Пауза")
 
     def stop_camera(self):
-        if self.video_running:
-            self.video_running = False
+        if self.video_cv2_running or self.video_neuro_running:
+            self.video_cv2_running = False
+            self.video_neuro_running = False
             self.video_paused = False
             if self.cap:
                 self.cap.release()
