@@ -27,6 +27,7 @@ class Application(tk.Tk):
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
         self.objects_coord = []
+        self.send_list = []
 
         self.title("Машинное зрение")
 
@@ -172,7 +173,6 @@ class Application(tk.Tk):
         self.class_selection_entry = tk.OptionMenu(control_frame, self.class_selection, "All", *self.class_labels.values())
         self.class_selection_entry.grid(column=6, row=0, padx=5)
 
-
     def create_composition_settings(self):
         settings_frame = ttk.Frame(self, padding='10')
         settings_frame.place(relx=0.2, rely=0.35, anchor='n')
@@ -196,13 +196,23 @@ class Application(tk.Tk):
                                                                                            pady=10,
                                                                                            columnspan=2
                                                                                            )
+        ttk.Button(send_frame, text="Обновить список", command=self.update_objects_list).grid(column=3,
+                                                                                           row=0,
+                                                                                           pady=10,
+                                                                                           columnspan=2
+                                                                                           )
+
+    def update_objects_list(self):
+        self.send_list = []
 
     def send_coords(self):
-        first_object = sorted(self.objects_coord, key=lambda point: point[0]**2 + point[1]**2)[0]
-        self.ser.send_command(
-            f"G00 X {first_object[0]} Y {first_object[1]} Z {70}\n",
-            self.sent_data_label
-        )
+        if len(self.objects_coord) > 0:
+            first_object = sorted(self.objects_coord, key=lambda point: point[0]**2 + point[1]**2)[0]
+            self.send_list.append(first_object)
+            self.ser.send_command(
+                f"G00 X {first_object[0]} Y {first_object[1]} Z {70}\n",
+                self.sent_data_label
+            )
 
     def create_slider(self, frame, text, from_, to_, command, row, default=0):
         label = ttk.Label(frame, text=f"{text}")
@@ -220,6 +230,14 @@ class Application(tk.Tk):
 
     def update_color_components(self, value):
         self.color_components = int(float(value))
+
+    def check_for_send(self, x, y):
+        distance_list = [(x - p1) ** 2 + (y - p2) ** 2 for p1, p2 in self.send_list]
+        distance_list = sorted(distance_list)
+        if len(distance_list) != 0 and distance_list[0] < 20:
+            return True
+        else:
+            return False
 
     def detect_cameras(self):
         index = 0
@@ -253,6 +271,7 @@ class Application(tk.Tk):
 
     def pick_color(self, event):
         if self.cap and self.video_cv2_running:
+            self.update_objects_list()
             x, y = event.x, event.y
             image_width, image_height = self.image_size
 
@@ -346,10 +365,17 @@ class Application(tk.Tk):
                         center_x, center_y = x + w // 2, self.image_size[1] - (y + h) + h // 2
                         center_x_cam, center_y_cam = center_x - self.image_size[0] // 2, center_y - self.image_size[1] // 2
                         center_x_coord, center_y_coord = center_x_cam + self.x_0, center_y_cam + self.y_0
+                        # TODO: подумать над реализацией через классы
                         if w * h > self.min_area and 0 <= center_x_coord <= self.x_max and 0 <= center_y_coord <= self.y_max:
                             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                             cv2.putText(frame, str(i + 1), (x, y - 10), self.font, 0.5, (0, 255, 255), 2)
-                            self.objects_coord.append((int(center_x_coord * 1 / self.k), int(center_y_coord * 1 / self.k)))
+                            if self.check_for_send(int(center_x_coord * 1 / self.k), int(center_y_coord * 1 / self.k)):
+                                cv2.line(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                                cv2.line(frame, (x + w, y), (x, y + h), (0, 0, 255), 2)
+                            else:
+                                self.objects_coord.append(
+                                    (int(center_x_coord * 1 / self.k),
+                                     int(center_y_coord * 1 / self.k)))
 
                     center_x = self.image_size[0] // 2
                     center_y = self.image_size[1] // 2
