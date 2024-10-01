@@ -1,3 +1,9 @@
+#TODO: общение по TCP/IP: создать словарь цветов
+#TODO: Переписать интерфейс
+#TODO: Скеллинг интерфейса
+#TODO: калибровка
+
+
 import cv2
 import numpy as np
 import pandas as pd
@@ -6,6 +12,7 @@ from tkinter import ttk, colorchooser
 from PIL import Image, ImageTk
 from ultralytics import YOLO
 from server import Server
+import platform
 
 
 class Application(tk.Tk):
@@ -16,6 +23,7 @@ class Application(tk.Tk):
         self.image_size = (800, 560)
         self.video_cv2_running = False
         self.video_neuro_running = False
+        self.video_arUco_running = False
         self.video_paused = False
         self.is_camera_on = False
         self.cap = None
@@ -32,7 +40,12 @@ class Application(tk.Tk):
         self.title("Машинное зрение")
 
         self.tk.call('tk', 'scaling', 1.5)
-        self.state('zoomed')
+        current_os = platform.system()
+
+        if current_os == "Linux":
+            self.attributes('-fullscreen', True)
+        elif current_os == "Windows":
+            self.state('zoomed')
 
         self.ser = Server()
         self.model = YOLO('yolov8s.pt')
@@ -110,14 +123,14 @@ class Application(tk.Tk):
                                 width=2)
         axis_canvas.create_text(origin_x - 15, origin_y - axis_length, text="Y", fill='blue',
                                 font=('Arial', 12, 'bold'))
-        axis_canvas.create_text(origin_x + 28, origin_y - axis_length, text="255, мм", fill='blue',
+        axis_canvas.create_text(origin_x + 28, origin_y - axis_length, text="500, мм", fill='blue',
                                 font=('Arial', 8, 'bold'))
 
         axis_canvas.create_line(origin_x, origin_y, origin_x + axis_length, origin_y, arrow=tk.LAST, fill='red',
                                 width=2)
         axis_canvas.create_text(origin_x + axis_length, origin_y + 15, text="X", fill='red',
                                 font=('Arial', 12, 'bold'))
-        axis_canvas.create_text(origin_x + axis_length, origin_y - 15, text="255, мм", fill='red',
+        axis_canvas.create_text(origin_x + axis_length, origin_y - 15, text="500, мм", fill='red',
                                 font=('Arial', 8, 'bold'))
 
     def create_camera_widgets(self):
@@ -139,19 +152,29 @@ class Application(tk.Tk):
 
         ttk.Label(control_frame, text="Выбор камеры:").grid(column=0, row=0, sticky=tk.W)
 
-        self.camera_selection = ttk.Combobox(control_frame, values=self.detect_cameras(), state="readonly")
+        self.camera_selection = ttk.Combobox(control_frame, values=self.detect_cameras(), state="readonly", width=10)
         self.camera_selection.grid(column=1, row=0)
         if self.camera_selection['values']:  # Если камеры найдены, установить первую камеру по умолчанию
             self.camera_selection.current(0)
         else:
             self.camera_selection.set("Камеры не найдены")
 
-        ttk.Button(control_frame, text="Запустить камеру", command=self.start_cv2_camera).grid(column=2, row=0, padx=5)
-        ttk.Button(control_frame, text="Запустить нейросеть", command=self.start_neuro_camera).grid(column=5, row=0, padx=5)
-        ttk.Button(control_frame, text="Остановить", command=self.stop_camera).grid(column=3, row=0, padx=5)
+        self.option_var = tk.StringVar()
+        self.combobox = ttk.Combobox(control_frame, textvariable=self.option_var, state='readonly')
+        self.combobox['values'] = ("Манипулятор", "Нейросеть", "Распознавание ArUco")
+        self.combobox.grid(column=2, row=0, padx=5)
+        self.combobox.current(0)
 
+        self.aruco_var = tk.StringVar()
+        self.aruco_combobox = ttk.Combobox(control_frame, textvariable=self.aruco_var, state='readonly', width=4)
+        self.aruco_combobox['values'] = ("4x4", "5x5", "6x6", "7x7")
+        self.aruco_combobox.grid(column=7, row=0, padx=5)
+        self.aruco_combobox.current(0)
+
+        ttk.Button(control_frame, text="Запустить", command=self.start).grid(column=3, row=0, padx=5)
         self.pause_button = ttk.Button(control_frame, text="Пауза", command=self.pause_camera)
         self.pause_button.grid(column=4, row=0, padx=5)
+        ttk.Button(control_frame, text="Остановить", command=self.stop_camera).grid(column=5, row=0, padx=5)
 
         self.class_selection = tk.StringVar()
         self.class_selection.set("All")
@@ -170,7 +193,9 @@ class Application(tk.Tk):
                              72: 'sink', 73: 'refrigerator', 74: 'book', 75: 'clock', 76: 'vase', 77: 'scissors',
                              78: 'teddy bear', 79: 'hair drier', 80: 'toothbrsh'
                              }
-        self.class_selection_entry = tk.OptionMenu(control_frame, self.class_selection, "All", *self.class_labels.values())
+
+        self.class_selection_entry = tk.OptionMenu(control_frame, self.class_selection, "All",
+                                                   *self.class_labels.values())
         self.class_selection_entry.grid(column=6, row=0, padx=5)
 
     def create_composition_settings(self):
@@ -197,17 +222,17 @@ class Application(tk.Tk):
                                                                                            columnspan=2
                                                                                            )
         ttk.Button(send_frame, text="Обновить список", command=self.update_objects_list).grid(column=3,
-                                                                                           row=0,
-                                                                                           pady=10,
-                                                                                           columnspan=2
-                                                                                           )
+                                                                                              row=0,
+                                                                                              pady=10,
+                                                                                              columnspan=2
+                                                                                              )
 
     def update_objects_list(self):
         self.send_list = []
 
     def send_coords(self):
         if len(self.objects_coord) > 0:
-            first_object = sorted(self.objects_coord, key=lambda point: point[0]**2 + point[1]**2)[0]
+            first_object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[0]
             self.send_list.append(first_object)
             self.ser.send_command(
                 f"G00 X {first_object[0]} Y {first_object[1]} Z {70}\n",
@@ -253,21 +278,20 @@ class Application(tk.Tk):
             index += 1
         return available_cameras
 
-    def start_cv2_camera(self):
-        if not self.video_cv2_running and self.camera_selection.get() != "Камеры не найдены":
+    def start(self):
+        if self.camera_selection.get() != "Камеры не найдены":
             self.stop_camera()
             camera_index = int(self.camera_selection.get().split()[-1])
             self.cap = cv2.VideoCapture(camera_index)
-            self.video_cv2_running = True
-            self.show_frame()
-
-    def start_neuro_camera(self):
-        if not self.video_neuro_running and self.camera_selection.get() != "Камеры не найдены":
-            self.stop_camera()
-            camera_index = int(self.camera_selection.get().split()[-1])
-            self.cap = cv2.VideoCapture(camera_index)
-            self.video_neuro_running = True
-            self.show_neuro_frame()
+            if not self.video_cv2_running and self.option_var.get() == "Манипулятор":
+                self.video_cv2_running = True
+                self.show_frame()
+            elif not self.video_neuro_running and self.option_var.get() == "Нейросеть":
+                self.video_neuro_running = True
+                self.show_neuro_frame()
+            elif not self.video_arUco_running and self.option_var.get() == "Распознавание ArUco":
+                self.video_arUco_running = True
+                self.show_arUco_frame()
 
     def pick_color(self, event):
         if self.cap and self.video_cv2_running:
@@ -303,6 +327,41 @@ class Application(tk.Tk):
                         min(s_val + tol_s, 255),
                         min(v_val + tol_v, 255)
                     ], dtype=np.uint8)
+
+    def show_arUco_frame(self):
+        if self.cap and self.video_arUco_running:
+            if not self.video_paused:
+                ret, frame = self.cap.read()
+                if ret:
+                    frame = self.apply_settings(frame)
+                    frame = cv2.resize(frame, self.image_size)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                    selected_dict = self.aruco_combobox.get()
+
+                    if selected_dict == "4x4":
+                        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+                    elif selected_dict == "5x5":
+                        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50)
+                    elif selected_dict == "6x6":
+                        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_50)
+                    else:
+                        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_7X7_50)
+
+                    aruco_params = cv2.aruco.DetectorParameters()
+
+                    corners, ids, _ = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=aruco_params)
+
+                    if len(corners) > 0:
+                        frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+
+                    img = Image.fromarray(frame)
+                    imgtk = ImageTk.PhotoImage(image=img)
+                    self.video_label.imgtk = imgtk
+                    self.video_label.configure(image=imgtk)
+
+            self.video_label.after(10, self.show_arUco_frame)
 
     def show_neuro_frame(self):
         if self.cap and self.video_neuro_running:
@@ -363,9 +422,9 @@ class Application(tk.Tk):
                     for i, contour in enumerate(conts):
                         x, y, w, h = cv2.boundingRect(contour)
                         center_x, center_y = x + w // 2, self.image_size[1] - (y + h) + h // 2
-                        center_x_cam, center_y_cam = center_x - self.image_size[0] // 2, center_y - self.image_size[1] // 2
+                        center_x_cam, center_y_cam = center_x - self.image_size[0] // 2, center_y - self.image_size[
+                            1] // 2
                         center_x_coord, center_y_coord = center_x_cam + self.x_0, center_y_cam + self.y_0
-                        # TODO: подумать над реализацией через классы
                         if w * h > self.min_area and 0 <= center_x_coord <= self.x_max and 0 <= center_y_coord <= self.y_max:
                             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                             cv2.putText(frame, str(i + 1), (x, y - 10), self.font, 0.5, (0, 255, 255), 2)
@@ -403,7 +462,7 @@ class Application(tk.Tk):
                     )
                     cv2.putText(frame, "Y", (origin_x - 15, origin_y - axis_length), self.font, 0.5,
                                 (255, 0, 0), 2)
-                    cv2.putText(frame, "255, mm", (origin_x + 10, origin_y - axis_length),
+                    cv2.putText(frame, "500, mm", (origin_x + 10, origin_y - axis_length),
                                 self.font, 0.43, (255, 0, 0), 1)
 
                     cv2.arrowedLine(
@@ -416,7 +475,7 @@ class Application(tk.Tk):
                     )
                     cv2.putText(frame, "X", (origin_x + axis_length - 5, origin_y + 20), self.font, 0.5,
                                 (0, 0, 255), 2)
-                    cv2.putText(frame, "255, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
+                    cv2.putText(frame, "500, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
                                 0.43, (0, 0, 255), 1)
                     # cv2.putText(frame, "0", (origin_x - 20, origin_y + 10), self.font, 0.5, (0, 255, 0), 1)
 
@@ -455,9 +514,10 @@ class Application(tk.Tk):
                 self.pause_button.configure(text="Пауза")
 
     def stop_camera(self):
-        if self.video_cv2_running or self.video_neuro_running:
+        if self.video_cv2_running or self.video_neuro_running or self.video_arUco_running:
             self.video_cv2_running = False
             self.video_neuro_running = False
+            self.video_arUco_running = False
             self.video_paused = False
             if self.cap:
                 self.cap.release()
