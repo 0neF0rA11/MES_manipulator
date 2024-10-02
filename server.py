@@ -20,7 +20,7 @@ class Server:
 
         # Wait for a client to connect
         self.client_socket, self.address = self.server_socket.accept()
-        label.config(f"Connection from {self.address} established!")
+        label.config(text=f"Connection from {self.address} established!")
 
     def close_port(self, label):
         if self.client_socket:

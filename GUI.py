@@ -84,15 +84,13 @@ class Application(tk.Tk):
         self.create_composition_settings()
 
     def read_from_server(self):
-        try:
+        if self.ser and self.ser.client_socket:
             data = self.ser.client_socket.recv(1024).decode('utf-8')
             if data:
                 received_data = data.strip()
                 self.received_data_label.config(text=f"Received: {received_data}")
                 self.response_to_request(received_data.split())
-            self.after(1, self.read_from_server)
-        except Exception as e:
-            self.received_data_label.config(text="Error reading from client")
+        self.after(1, self.read_from_server)
 
     def response_to_request(self, received_list):
         if received_list[0].lower() not in self.color_dict:
@@ -146,7 +144,7 @@ class Application(tk.Tk):
                         self.objects_coord.append(
                             (int(center_x_coord * 1 / self.k),
                              int(center_y_coord * 1 / self.k)))
-                self.send_coords(number)
+                self.send_coords(int(number))
 
     def draw_axis(self):
         axis_frame = ttk.Frame(self)
@@ -274,7 +272,7 @@ class Application(tk.Tk):
         self.send_list = []
 
     def send_coords(self, number=0):
-        if len(self.objects_coord) > 0:
+        if len(self.objects_coord) > 0 and 1 <= number <= len(self.objects_coord):
             object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[number-1]
             self.send_list.append(object)
             self.ser.send_command(
