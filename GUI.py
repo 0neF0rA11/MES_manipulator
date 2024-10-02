@@ -1,4 +1,4 @@
-#TODO: общение по TCP/IP: создать словарь цветов
+
 #TODO: Переписать интерфейс
 #TODO: Скеллинг интерфейса
 #TODO: калибровка
@@ -30,6 +30,13 @@ class Application(tk.Tk):
         self.kernelOpen = np.ones((5, 5))
         self.kernelClose = np.ones((20, 20))
 
+        self.color_dict = {
+            'blue': (105, 219, 129),
+            'orange': (11, 252, 176),
+            'yellow': (19, 255, 169),
+            'green': (77, 225, 77)
+        }
+
         self.lowerBound = np.array([0, 0, 0], dtype=np.uint8)
         self.upperBound = np.array([179, 255, 255], dtype=np.uint8)
         self.font = cv2.FONT_HERSHEY_SIMPLEX
@@ -47,7 +54,11 @@ class Application(tk.Tk):
         elif current_os == "Windows":
             self.state('zoomed')
 
-        self.ser = Server()
+        connection_frame = ttk.Frame(self, padding="20")
+        connection_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        connect_status_label = ttk.Label(connection_frame, text="Not connected", font=("Arial", 14, "bold"))
+        connect_status_label.grid(column=0, row=0, sticky=tk.W)
+        self.ser = Server(label=connect_status_label)
         self.model = YOLO('yolov8s.pt')
         self.classes = self.model.names
 
@@ -66,44 +77,76 @@ class Application(tk.Tk):
 
         self.received_data_label = ttk.Label(self, text="Received: None", font=("Arial", 14, "bold"))
         self.received_data_label.place(relx=.05, rely=.9, anchor="sw")
+        self.read_from_server()
 
         # self.draw_axis()
-        self.create_port_widgets()
         self.create_camera_widgets()
         self.create_composition_settings()
 
-    def create_port_widgets(self):
-        connection_frame = ttk.Frame(self, padding="20")
-        connection_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+    def read_from_server(self):
+        try:
+            data = self.ser.client_socket.recv(1024).decode('utf-8')
+            if data:
+                received_data = data.strip()
+                self.received_data_label.config(text=f"Received: {received_data}")
+                self.response_to_request(received_data.split())
+            self.after(1, self.read_from_server)
+        except Exception as e:
+            self.received_data_label.config(text="Error reading from client")
 
-        ttk.Label(connection_frame, text="Port:").grid(column=0, row=0, sticky=tk.W)
-        port_combobox = ttk.Combobox(connection_frame, values=self.ser.ports)
-        port_combobox.grid(column=1, row=0)
+    def response_to_request(self, received_list):
+        if received_list[0].lower() not in self.color_dict:
+            return
 
-        ttk.Label(connection_frame, text="Baud Rate:").grid(column=0, row=1, sticky=tk.W)
-        baudrate_combobox = ttk.Combobox(connection_frame, values=[9600, 19200, 38400, 57600, 115200], state="readonly")
-        baudrate_combobox.grid(column=1, row=1)
-        baudrate_combobox.current(4)
+        color, number = received_list
 
-        self.create_port_button(connection_frame, port_combobox, baudrate_combobox)
+        tol_h = 2
+        tol_s = 50
+        tol_v = 50
 
-    def create_port_button(self, frame, port_box, baudrate_box):
-        connect_status_label = ttk.Label(frame, text="Not connected", font=("Arial", 14, "bold"))
-        connect_status_label.grid(column=3, row=0, sticky=tk.W)
+        h_val, s_val, v_val = self.color_dict[color.lower()]
 
-        ttk.Button(frame,
-                   text="Open Port",
-                   command=lambda: self.ser.connect_port(port_box.get(),
-                                                         baudrate_box.get(),
-                                                         connect_status_label,
-                                                         self,
-                                                         self.received_data_label)
-                   ).grid(column=2, row=0)
+        self.lowerBound = np.array([
+            max(h_val - tol_h, 0),
+            max(s_val - tol_s, 0),
+            max(v_val - tol_v, 0)
+        ], dtype=np.uint8)
+        self.upperBound = np.array([
+            min(h_val + tol_h, 179),
+            min(s_val + tol_s, 255),
+            min(v_val + tol_v, 255)
+        ], dtype=np.uint8)
 
-        ttk.Button(frame,
-                   text="Close Port",
-                   command=lambda: self.ser.close_port(connect_status_label)
-                   ).grid(column=2, row=1)
+        if self.camera_selection.get() != "Камеры не найдены":
+            camera_index = int(self.camera_selection.get().split()[-1])
+            if not self.cap:
+                self.cap = cv2.VideoCapture(camera_index)
+
+            ret, frame = self.cap.read()
+            if ret:
+                frame = cv2.resize(frame, self.image_size)
+                imgHSV = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+                mask = cv2.inRange(imgHSV, self.lowerBound, self.upperBound)
+
+                maskOpen = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernelOpen)
+                maskClose = cv2.morphologyEx(maskOpen, cv2.MORPH_CLOSE, self.kernelClose)
+
+                maskFinal = maskClose
+                conts, _ = cv2.findContours(maskFinal.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+                self.objects_coord = []
+                for i, contour in enumerate(conts):
+                    x, y, w, h = cv2.boundingRect(contour)
+                    center_x, center_y = x + w // 2, self.image_size[1] - (y + h) + h // 2
+                    center_x_cam, center_y_cam = center_x - self.image_size[0] // 2, center_y - self.image_size[
+                        1] // 2
+                    center_x_coord, center_y_coord = center_x_cam + self.x_0, center_y_cam + self.y_0
+                    if w * h > self.min_area and 0 <= center_x_coord <= self.x_max and 0 <= center_y_coord <= self.y_max:
+                        self.objects_coord.append(
+                            (int(center_x_coord * 1 / self.k),
+                             int(center_y_coord * 1 / self.k)))
+                self.send_coords(number)
 
     def draw_axis(self):
         axis_frame = ttk.Frame(self)
@@ -230,12 +273,12 @@ class Application(tk.Tk):
     def update_objects_list(self):
         self.send_list = []
 
-    def send_coords(self):
+    def send_coords(self, number=0):
         if len(self.objects_coord) > 0:
-            first_object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[0]
-            self.send_list.append(first_object)
+            object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[number-1]
+            self.send_list.append(object)
             self.ser.send_command(
-                f"G00 X {first_object[0]} Y {first_object[1]} Z {70}\n",
+                f"G00 X {object[0]} Y {object[1]} Z {70}\n",
                 self.sent_data_label
             )
 
@@ -312,6 +355,8 @@ class Application(tk.Tk):
                     h_val = int(hsv_value[0])
                     s_val = int(hsv_value[1])
                     v_val = int(hsv_value[2])
+
+                    print(h_val, s_val, v_val)
 
                     tol_h = 2
                     tol_s = 50

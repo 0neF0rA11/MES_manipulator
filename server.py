@@ -1,44 +1,38 @@
-import serial
-import serial.tools.list_ports
-import time
+import socket
+import threading
 
 
 class Server:
-    def __init__(self):
-        self.received_data = None
-        self.ser = None
-        self.ports = None
-        self.get_ports()
+    def __init__(self, label, host='0.0.0.0', port=12345):
+        self.host = host
+        self.port = port
+        self.server_socket = None
+        self.client_socket = None
+        self.address = None
+        self.server_thread = threading.Thread(target=self.start_server, args=(label,), daemon=True)
+        self.server_thread.start()
 
-    def connect_port(self, port, baudrate, label, page, received_label):
-        try:
-            self.ser = serial.Serial(port=port, baudrate=baudrate)
-            label.config(text="Connected to " + port)
-            self.read_from_port(page, received_label)
-        except Exception as e:
-            label.config(text="Connection Failed")
+    def start_server(self, label):
+        # Create a TCP/IP socket
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(1)
 
-    def get_ports(self):
-        ports = serial.tools.list_ports.comports()
-        self.ports = [port.device for port in ports]
+        # Wait for a client to connect
+        self.client_socket, self.address = self.server_socket.accept()
+        label.config(f"Connection from {self.address} established!")
 
     def close_port(self, label):
-        if self.ser and self.ser.is_open:
-            self.ser.close()
-            label.config(text="Port Closed")
+        if self.client_socket:
+            self.client_socket.close()
+            label.config(text="Connection Closed")
         else:
-            label.config(text="No Port is Open")
-
-    def read_from_port(self, page, received_label):
-        if self.ser and self.ser.is_open:
-            if self.ser.in_waiting > 0:
-                self.received_data = self.ser.read(self.ser.in_waiting).decode('utf-8', errors='replace').strip()
-                received_label.config(text=f"Received: {self.received_data}")
-            page.after(1, lambda: self.read_from_port(page, received_label))
+            label.config(text="No Connection is Open")
 
     def send_command(self, command, label):
-        # if self.ser and self.ser.is_open:
-        #     self.ser.write(command.encode())
-        #     time.sleep(0.002)
-        label.config(text=f"Sent: {command.strip()}")
+        try:
+            self.client_socket.sendall(command.encode('utf-8'))
+            label.config(text=f"Sent: {command.strip()}")
+        except Exception as e:
+            label.config(text="Error sending command")
 
