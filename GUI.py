@@ -58,7 +58,7 @@ class Application(tk.Tk):
         connection_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
         connect_status_label = ttk.Label(connection_frame, text="Not connected", font=("Arial", 14, "bold"))
         connect_status_label.grid(column=0, row=0, sticky=tk.W)
-        self.ser = Server(label=connect_status_label)
+        self.ser = Server()
         self.model = YOLO('yolov8s.pt')
         self.classes = self.model.names
 
@@ -77,20 +77,44 @@ class Application(tk.Tk):
 
         self.received_data_label = ttk.Label(self, text="Received: None", font=("Arial", 14, "bold"))
         self.received_data_label.place(relx=.05, rely=.9, anchor="sw")
-        self.read_from_server()
 
         # self.draw_axis()
+        self.create_port_widgets()
         self.create_camera_widgets()
         self.create_composition_settings()
 
-    def read_from_server(self):
-        if self.ser and self.ser.client_socket:
-            data = self.ser.client_socket.recv(1024).decode('utf-8')
-            if data:
-                received_data = data.strip()
-                self.received_data_label.config(text=f"Received: {received_data}")
-                self.response_to_request(received_data.split())
-        self.after(1, self.read_from_server)
+    def create_port_widgets(self):
+        connection_frame = ttk.Frame(self, padding="20")
+        connection_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+
+        ttk.Label(connection_frame, text="Port:").grid(column=0, row=0, sticky=tk.W)
+        port_combobox = ttk.Combobox(connection_frame, values=self.ser.ports)
+        port_combobox.grid(column=1, row=0)
+
+        ttk.Label(connection_frame, text="Baud Rate:").grid(column=0, row=1, sticky=tk.W)
+        baudrate_combobox = ttk.Combobox(connection_frame, values=[9600, 19200, 38400, 57600, 115200], state="readonly")
+        baudrate_combobox.grid(column=1, row=1)
+        baudrate_combobox.current(4)
+
+        self.create_port_button(connection_frame, port_combobox, baudrate_combobox)
+
+    def create_port_button(self, frame, port_box, baudrate_box):
+        connect_status_label = ttk.Label(frame, text="Not connected", font=("Arial", 14, "bold"))
+        connect_status_label.grid(column=3, row=0, sticky=tk.W)
+
+        ttk.Button(frame,
+                   text="Open Port",
+                   command=lambda: self.ser.connect_port(port_box.get(),
+                                                         baudrate_box.get(),
+                                                         connect_status_label,
+                                                         self,
+                                                         self.received_data_label)
+                   ).grid(column=2, row=0)
+
+        ttk.Button(frame,
+                   text="Close Port",
+                   command=lambda: self.ser.close_port(connect_status_label)
+                   ).grid(column=2, row=1)
 
     def response_to_request(self, received_list):
         if received_list[0].lower() not in self.color_dict:
@@ -271,7 +295,7 @@ class Application(tk.Tk):
     def update_objects_list(self):
         self.send_list = []
 
-    def send_coords(self, number=0):
+    def send_coords(self, number=1):
         if len(self.objects_coord) > 0 and 1 <= number <= len(self.objects_coord):
             object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[number-1]
             self.send_list.append(object)
@@ -353,8 +377,6 @@ class Application(tk.Tk):
                     h_val = int(hsv_value[0])
                     s_val = int(hsv_value[1])
                     v_val = int(hsv_value[2])
-
-                    print(h_val, s_val, v_val)
 
                     tol_h = 2
                     tol_s = 50
