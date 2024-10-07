@@ -41,4 +41,4 @@ class Server:
         if self.ser and self.ser.is_open:
             self.ser.write(command.encode())
             time.sleep(0.002)
-            label.config(text=f"Sent: {command.strip()}")
+        label.config(text=f"Sent: {command.strip()}")
