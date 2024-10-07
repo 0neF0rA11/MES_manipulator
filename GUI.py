@@ -1,7 +1,4 @@
-
-#TODO: Переписать интерфейс
 #TODO: Скеллинг интерфейса
-#TODO: калибровка
 
 
 import cv2
@@ -13,11 +10,14 @@ from PIL import Image, ImageTk
 from ultralytics import YOLO
 from server import Server
 import platform
+from calibration import CalibrationWindow
+import os
 
 
 class Application(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.set_calib = None
         self.min_area = 250
 
         self.image_size = (800, 560)
@@ -27,6 +27,7 @@ class Application(tk.Tk):
         self.video_paused = False
         self.is_camera_on = False
         self.cap = None
+
         self.kernelOpen = np.ones((5, 5))
         self.kernelClose = np.ones((20, 20))
 
@@ -62,11 +63,7 @@ class Application(tk.Tk):
         self.model = YOLO('yolov8s.pt')
         self.classes = self.model.names
 
-        self.k = 83 / 70
-        self.cm_to_pixel = int(250 * self.k)
-        self.x_0, self.y_0 = self.cm_to_pixel, self.cm_to_pixel
-        self.x_max = self.x_0 + self.cm_to_pixel
-        self.y_max = self.y_0 + self.cm_to_pixel
+        self.config()
 
         self.exposure = 0
         self.white_balance = 0
@@ -82,6 +79,32 @@ class Application(tk.Tk):
         self.create_port_widgets()
         self.create_camera_widgets()
         self.create_composition_settings()
+
+    def config(self):
+        if not os.path.exists("config.txt"):
+            self.k_x = 83 / 70
+            self.k_y = 83 / 70
+            self.mm_to_pixel_x = int(250 * self.k_x)
+            self.mm_to_pixel_y = int(250 * self.k_x)
+            self.x_0, self.y_0 = self.mm_to_pixel_x, self.mm_to_pixel_y
+            self.x_max = self.x_0 + self.mm_to_pixel_x
+            self.y_max = self.y_0 + self.mm_to_pixel_y
+            self.h = 70
+            self.len_f_x, self.len_f_y = 500, 500
+        else:
+            with open("config.txt", "r") as file:
+                config_data = {}
+                for line in file:
+                    key, value = line.strip().split()
+                    config_data[key] = value
+                self.k_x = float(config_data['k_x'])
+                self.k_y = float(config_data['k_y'])
+                self.len_f_x, self.len_f_y = int(config_data['len_f_x']), int(config_data['len_f_y'])
+                self.x_0, self.y_0 = int(self.k_x * self.len_f_x // 2), int(self.k_y * self.len_f_y // 2)
+                self.x_max = self.x_0 * 2
+                self.y_max = self.y_0 * 2
+                self.h = int(config_data['h'])
+
 
     def create_port_widgets(self):
         connection_frame = ttk.Frame(self, padding="20")
@@ -115,6 +138,16 @@ class Application(tk.Tk):
                    text="Close Port",
                    command=lambda: self.ser.close_port(connect_status_label)
                    ).grid(column=2, row=1)
+
+        ttk.Button(frame, text="Завершить программу", command=self.destroy).grid(column=0, row=3)
+
+        ttk.Button(frame,
+                   text="Калибровка",
+                   command=self.open_new_window
+                   ).grid(column=2, row=3)
+
+    def open_new_window(self):
+        self.set_calib = CalibrationWindow(self, self.image_size, self.available_cameras)
 
     def response_to_request(self, received_list):
         if received_list[0].lower() not in self.color_dict:
@@ -166,8 +199,8 @@ class Application(tk.Tk):
                     center_x_coord, center_y_coord = center_x_cam + self.x_0, center_y_cam + self.y_0
                     if w * h > self.min_area and 0 <= center_x_coord <= self.x_max and 0 <= center_y_coord <= self.y_max:
                         self.objects_coord.append(
-                            (int(center_x_coord * 1 / self.k),
-                             int(center_y_coord * 1 / self.k)))
+                            (int(center_x_coord * 1 / self.k_x),
+                             int(center_y_coord * 1 / self.k_y)))
                 self.send_coords(int(number))
 
     def draw_axis(self):
@@ -188,14 +221,14 @@ class Application(tk.Tk):
                                 width=2)
         axis_canvas.create_text(origin_x - 15, origin_y - axis_length, text="Y", fill='blue',
                                 font=('Arial', 12, 'bold'))
-        axis_canvas.create_text(origin_x + 28, origin_y - axis_length, text="500, мм", fill='blue',
+        axis_canvas.create_text(origin_x + 28, origin_y - axis_length, text=f"{self.len_f_y}, мм", fill='blue',
                                 font=('Arial', 8, 'bold'))
 
         axis_canvas.create_line(origin_x, origin_y, origin_x + axis_length, origin_y, arrow=tk.LAST, fill='red',
                                 width=2)
         axis_canvas.create_text(origin_x + axis_length, origin_y + 15, text="X", fill='red',
                                 font=('Arial', 12, 'bold'))
-        axis_canvas.create_text(origin_x + axis_length, origin_y - 15, text="500, мм", fill='red',
+        axis_canvas.create_text(origin_x + axis_length, origin_y - 15, text=f"f{self.len_f_x}, мм", fill='red',
                                 font=('Arial', 8, 'bold'))
 
     def create_camera_widgets(self):
@@ -300,7 +333,7 @@ class Application(tk.Tk):
             object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[number-1]
             self.send_list.append(object)
             self.ser.send_command(
-                f"G00 X {object[0]} Y {object[1]} Z {70}\n",
+                f"G00 X {object[0]} Y {object[1]} Z {self.h}\n",
                 self.sent_data_label
             )
 
@@ -331,17 +364,17 @@ class Application(tk.Tk):
 
     def detect_cameras(self):
         index = 0
-        available_cameras = []
+        self.available_cameras = []
         while True:
             cap = cv2.VideoCapture(index)
             if not cap.isOpened():
                 break
             ret, _ = cap.read()
             if ret:
-                available_cameras.append(f"Камера {index}")
+                self.available_cameras.append(f"Камера {index}")
             cap.release()
             index += 1
-        return available_cameras
+        return self.available_cameras
 
     def start(self):
         if self.camera_selection.get() != "Камеры не найдены":
@@ -350,6 +383,8 @@ class Application(tk.Tk):
             self.cap = cv2.VideoCapture(camera_index)
             if not self.video_cv2_running and self.option_var.get() == "Манипулятор":
                 self.video_cv2_running = True
+                if self.set_calib and self.set_calib.flag:
+                    self.config()
                 self.show_frame()
             elif not self.video_neuro_running and self.option_var.get() == "Нейросеть":
                 self.video_neuro_running = True
@@ -493,13 +528,13 @@ class Application(tk.Tk):
                         if w * h > self.min_area and 0 <= center_x_coord <= self.x_max and 0 <= center_y_coord <= self.y_max:
                             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                             cv2.putText(frame, str(i + 1), (x, y - 10), self.font, 0.5, (0, 255, 255), 2)
-                            if self.check_for_send(int(center_x_coord * 1 / self.k), int(center_y_coord * 1 / self.k)):
+                            if self.check_for_send(int(center_x_coord * 1 / self.k_x), int(center_y_coord * 1 / self.k_y)):
                                 cv2.line(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                                 cv2.line(frame, (x + w, y), (x, y + h), (0, 0, 255), 2)
                             else:
                                 self.objects_coord.append(
-                                    (int(center_x_coord * 1 / self.k),
-                                     int(center_y_coord * 1 / self.k)))
+                                    (int(center_x_coord * 1 / self.k_x),
+                                     int(center_y_coord * 1 / self.k_y)))
 
                     center_x = self.image_size[0] // 2
                     center_y = self.image_size[1] // 2
@@ -527,7 +562,7 @@ class Application(tk.Tk):
                     )
                     cv2.putText(frame, "Y", (origin_x - 15, origin_y - axis_length), self.font, 0.5,
                                 (255, 0, 0), 2)
-                    cv2.putText(frame, "500, mm", (origin_x + 10, origin_y - axis_length),
+                    cv2.putText(frame, f"{self.len_f_y}, mm", (origin_x + 10, origin_y - axis_length),
                                 self.font, 0.43, (255, 0, 0), 1)
 
                     cv2.arrowedLine(
@@ -540,7 +575,7 @@ class Application(tk.Tk):
                     )
                     cv2.putText(frame, "X", (origin_x + axis_length - 5, origin_y + 20), self.font, 0.5,
                                 (0, 0, 255), 2)
-                    cv2.putText(frame, "500, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
+                    cv2.putText(frame, f"{self.len_f_x}, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
                                 0.43, (0, 0, 255), 1)
                     # cv2.putText(frame, "0", (origin_x - 20, origin_y + 10), self.font, 0.5, (0, 255, 0), 1)
 
