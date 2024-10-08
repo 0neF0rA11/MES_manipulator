@@ -12,23 +12,21 @@ class Server:
         self.get_ports()
 
     def get_ports(self):
-        ports = serial.tools.list_ports.comports()
-        self.ports = [port.device for port in ports]
+        self.ports = ["/dev/ttyTHS1"]
 
     def connect_port(self, port, baudrate, label, page, received_label):
         try:
             self.ser = serial.Serial(
-                port="/dev/ttyTHS1",
-                baudrate=115200,
+                port=port,
+                baudrate=baudrate,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
             )
             time.sleep(1)
 
-            label.config(text="Connected to /dev/ttyTHS1")
+            label.config(text=f"Connected to {port}")
 
-            self.ser.write("UART Demonstration Program\r\n".encode())
             self.ser.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
 
             self.read_from_port(page, received_label)
