@@ -25,9 +25,6 @@ class Server:
             time.sleep(1)
 
             label.config(text=f"Connected to {port}")
-
-            self.ser.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
-
             self.read_from_port(page, received_label)
         except Exception as e:
             label.config(text="Connection Failed")
