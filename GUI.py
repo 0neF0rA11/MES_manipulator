@@ -150,7 +150,7 @@ class Application(tk.Tk):
 
     def response_to_request(self, received_list):
         if received_list[0].lower() not in self.color_dict:
-            self.ser.send_command("None\n", self.sent_data_label)
+            self.ser.send_command("Not cube\n", self.sent_data_label)
             return
 
         color, number = received_list
@@ -202,6 +202,8 @@ class Application(tk.Tk):
                             (int(center_x_coord * 1 / self.k_x),
                              int(center_y_coord * 1 / self.k_y)))
                 self.send_coords(int(number))
+            self.cap.release()
+            self.cap = None
 
     def draw_axis(self):
         axis_frame = ttk.Frame(self)
@@ -337,7 +339,7 @@ class Application(tk.Tk):
                 self.sent_data_label
             )
         else:
-            self.ser.send_command("None\n", self.sent_data_label)
+            self.ser.send_command("Not cube\n", self.sent_data_label)
 
     def create_slider(self, frame, text, from_, to_, command, row, default=0):
         label = ttk.Label(frame, text=f"{text}")
