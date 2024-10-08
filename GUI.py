@@ -117,7 +117,7 @@ class Application(tk.Tk):
         ttk.Label(connection_frame, text="Baud Rate:").grid(column=0, row=1, sticky=tk.W)
         baudrate_combobox = ttk.Combobox(connection_frame, values=[115200], state="readonly")
         baudrate_combobox.grid(column=1, row=1)
-        baudrate_combobox.current(4)
+        baudrate_combobox.current(0)
 
         self.create_port_button(connection_frame, port_combobox, baudrate_combobox)
 
