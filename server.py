@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import time
 import serial
 import serial.tools.list_ports
@@ -44,23 +43,9 @@ class Server:
     def read_from_port(self, page, received_label):
         if self.ser and self.ser.is_open:
             if self.ser.in_waiting > 0:
-                # Чтение данных из порта
                 self.received_data = self.ser.read(self.ser.in_waiting).decode('utf-8', errors='replace').strip()
-
-                # Обновление метки полученных данных
                 received_label.config(text=f"Received: {self.received_data}")
-
-                # Передача данных для обработки (например, в интерфейс)
                 page.response_to_request(self.received_data.split())
-
-                # Эхо-ответ (отправляем обратно то, что получили)
-                self.ser.write(self.received_data.encode())
-
-                # Добавление перевода строки для удобства работы с Windows системами
-                if "\r" in self.received_data:
-                    self.ser.write("\n".encode())
-
-            # Повторный вызов функции для асинхронного чтения данных
             page.after(1, lambda: self.read_from_port(page, received_label))
 
     def send_command(self, command, label):
@@ -69,6 +54,3 @@ class Server:
             time.sleep(0.002)
         label.config(text=f"Sent: {command.strip()}")
 
-# Пример использования:
-# server = Server()
-# server.connect_port("/dev/ttyTHS1", 115200, some_label, some_page, received_label)

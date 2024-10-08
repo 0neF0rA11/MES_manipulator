@@ -105,7 +105,6 @@ class Application(tk.Tk):
                 self.y_max = self.y_0 * 2
                 self.h = int(config_data['h'])
 
-
     def create_port_widgets(self):
         connection_frame = ttk.Frame(self, padding="20")
         connection_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
@@ -151,6 +150,7 @@ class Application(tk.Tk):
 
     def response_to_request(self, received_list):
         if received_list[0].lower() not in self.color_dict:
+            self.ser.send_command("None\n", self.sent_data_label)
             return
 
         color, number = received_list
@@ -336,6 +336,8 @@ class Application(tk.Tk):
                 f"G00 X {object[0]} Y {object[1]} Z {self.h}\n",
                 self.sent_data_label
             )
+        else:
+            self.ser.send_command("None\n", self.sent_data_label)
 
     def create_slider(self, frame, text, from_, to_, command, row, default=0):
         label = ttk.Label(frame, text=f"{text}")
