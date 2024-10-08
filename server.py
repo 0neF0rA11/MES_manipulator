@@ -18,22 +18,19 @@ class Server:
     def connect_port(self, port, baudrate, label, page, received_label):
         try:
             self.ser = serial.Serial(
-                port=port,
-                baudrate=baudrate,
+                port="/dev/ttyTHS1",
+                baudrate=115200,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
             )
             time.sleep(1)
 
-            # Обновление метки графического интерфейса
-            label.config(text="Connected to " + port)
+            label.config(text="Connected to /dev/ttyTHS1")
 
-            # Отправка простого сообщения при подключении
             self.ser.write("UART Demonstration Program\r\n".encode())
             self.ser.write("NVIDIA Jetson Nano Developer Kit\r\n".encode())
 
-            # Начало чтения данных с порта
             self.read_from_port(page, received_label)
         except Exception as e:
             label.config(text="Connection Failed")

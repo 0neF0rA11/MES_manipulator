@@ -575,8 +575,7 @@ class Application(tk.Tk):
                     )
                     cv2.putText(frame, "X", (origin_x + axis_length - 5, origin_y + 20), self.font, 0.5,
                                 (0, 0, 255), 2)
-                    cv2.putText(frame, f"{self.len_f_x
-                    }, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
+                    cv2.putText(frame, f"{self.len_f_x}, mm", (origin_x + axis_length - 30, origin_y - 20), self.font,
                                 0.43, (0, 0, 255), 1)
                     # cv2.putText(frame, "0", (origin_x - 20, origin_y + 10), self.font, 0.5, (0, 255, 0), 1)
 
