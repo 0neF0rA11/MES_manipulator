@@ -24,7 +24,7 @@ class CalibrationWindow(tk.Toplevel):
         self.title("Калибровочное окно")
         self.geometry("1280x720+100+100")
 
-        ttk.Button(self, text="Закрыть", command=self.destroy).place(relx=0.01, rely=0.01)
+        ttk.Button(self, text="Закрыть", command=self.destroy_cam).place(relx=0.01, rely=0.01)
 
         camera_frame = ttk.Frame(self, padding='10')
         camera_frame.place(relx=0.65, rely=0.02, anchor='n')
@@ -72,6 +72,12 @@ class CalibrationWindow(tk.Toplevel):
 
         ttk.Button(settings_frame, text="Записать", command=self.save_config).grid(column=0, row=len(fields) + 2, columnspan=2, pady=10)
 
+    def destroy_cam(self):
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+        self.destroy()
+
     def save_config(self):
         data = {label: entry.get() for label, entry in zip(['k_y', 'k_x', 'h', 'field_x', 'field_y'], self.entries.values())}
         data['k_x'] = self.w / int(data['k_x'])
@@ -83,7 +89,8 @@ class CalibrationWindow(tk.Toplevel):
             file.write(f"len_f_x {int(data['field_x'])}\n")
             file.write(f"len_f_y {int(data['field_y'])}\n")
         self.flag = True
-        self.destroy()
+        self.destroy_cam()
+
 
     def start(self):
         if self.camera_selection.get() != "Камеры не найдены":
