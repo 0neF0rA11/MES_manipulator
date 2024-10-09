@@ -335,7 +335,7 @@ class Application(tk.Tk):
             object = sorted(self.objects_coord, key=lambda point: point[0] ** 2 + point[1] ** 2)[number-1]
             self.send_list.append(object)
             self.ser.send_command(
-                f"G00 X {object[0]} Y {object[1]} Z {self.h}\n",
+                f"G01 X {object[0]} Y {object[1]} Z {self.h}\n",
                 self.sent_data_label
             )
         else:
